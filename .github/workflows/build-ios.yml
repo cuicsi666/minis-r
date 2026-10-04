@@ -81,6 +81,7 @@ jobs:
                src/ios/Configs/ProviderCustomization.xcconfig
           fi
           set -o pipefail
+          set +e
           set -x
           xcodebuild \
             -project src/ios/Minis.xcodeproj \
@@ -91,7 +92,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build 2>&1 | tee /tmp/xcbuild.log | tail -80
+          status=${PIPESTATUS[0]}
           set +x
+          echo "xcodebuild exit=$status"
+          if [ $status -ne 0 ]; then
+            echo "===== BUILD ERROR DETAIL ====="
+            grep -nE "error:|BUILD FAILED|FAILED" /tmp/xcbuild.log | tail -50 || true
+            echo "===== LAST 60 LINES ====="
+            tail -60 /tmp/xcbuild.log
+            exit $status
+          fi
           test -d build/Build/Products/Release-iphoneos || { echo "NO .app produced"; tail -150 /tmp/xcbuild.log; exit 1; }
 
       - name: Package IPA
