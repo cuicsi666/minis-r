@@ -490,27 +490,19 @@ final class VoiceInputViewModel: ObservableObject {
         callModeActive = true
         callAwaitingReply = false
         lastTranscriptChangeAt = Date()
-        // [T-call-bluetooth-pause] Force the shared bidirectional audio profile AND
-        // hold the session active the whole call, so Bluetooth never drops/
-        // re-establishes a link at turn boundaries (which flips ANC). Mid=the
-        // mic session activates with the call-hold already live.
+        // [T-call-bluetooth-pause] Force the shared bidirectional HFP-only profile
+        // AND hold the session active for the WHOLE call so Bluetooth never
+        // drops/re-establishes a link at turn boundaries (which flips ANC).
+        // The VAD engine keeps running the entire call ("一直通话") — reply
+        // playback just tags the input as ignored instead of stopping the mic,
+        // so iOS sees ONE continuous phone call: ANC opens once, stays put.
         AudioSessionCoordinator.shared.callModeProfileForced = true
         AudioSessionCoordinator.shared.begin(.callHold)
-        // [T-call-read-reply] Calls MUST read the reply aloud. IMPORTANT: canSpeakNow
-        // gates on VoiceOutputState.canPlay (== VoiceOutputState.isEnabled &&
-        // !muted). VoiceOutputState.isEnabled's didSet mirrors to
-        // VoiceOutputPreferences, but NOT the reverse — writing the Preferences
-        // directly left the live gate false (why earlier builds never spoke).
-        // Write the AUTHORITATIVE state object instead.
-        readAloudBeforeCall = VoiceOutputState.shared.isEnabled
-        if AutoPlaybackSettings.enabled {
-            // 自动播放系统接管回复播报 — 不强开系统朗读, 避免双份播报
-            VoiceLog.log("[CallMode] AutoPlayback ON — system read-aloud untouched")
-        } else {
-            VoiceOutputState.shared.isEnabled = true
-        }
+        // NOTE: deliberately do NOT touch system read-aloud here — reply voicing
+        // is handled by the in-app AutoPlayback system (TTS API → own player),
+        // not the system TTS reader.
         startCallIdleTimer()
-        VoiceLog.log("[CallMode] enter — starting to listen (read-reply forced ON)")
+        VoiceLog.log("[CallMode] enter — continuous session, listening ON")
         startVAD()
     }
 
@@ -524,10 +516,9 @@ final class VoiceInputViewModel: ObservableObject {
         if vad.isRunning { stopListening() }
         state = .waiting
         // Release the call-hold (session may deactivate now the call is over)
-        // and the forced call profile; restore the user's own read-reply pref.
+        // and the forced call profile.
         AudioSessionCoordinator.shared.end(.callHold)
         AudioSessionCoordinator.shared.callModeProfileForced = false
-        if let prev = readAloudBeforeCall { VoiceOutputState.shared.isEnabled = prev }
         readAloudBeforeCall = nil
     }
 
@@ -538,28 +529,21 @@ final class VoiceInputViewModel: ObservableObject {
         lastTranscriptChangeAt = Date()
         guard callModeActive else { return }
         VoiceLog.log("[CallMode] resumeListening")
-        // [CallMode] Recording was paused at send; restart the VAD now that the
-        // reply has fully completed. The call-hold keeps the session active.
+        // [CallMode] 一直通话: engine keeps running the whole call — just
+        // re-enable VAD input. Only (re)start the engine if it somehow stopped.
         vad.setIgnoreInput(false)
-        VoiceModePreference.shared.isCapturing = true
-        if !vad.isRunning || !vad.isCapturing { startVAD() }
+        if !vad.isCapturing { startVAD() }
     }
 
-    /// [T-call-continuous-mic] Toggle "AI speaking" vs "listening" inside a call.
-    /// While the reply plays we DON'T stop the engine (that would tear down the
-    /// Bluetooth phone route and flip ANC every round) — we tag the input as
-    /// ignored AND clear the `isCapturing` flag so `canSpeakNow` lets the TTS
-    /// actually speak through the same HFP link. When playback ends we reverse.
-    ///
-    /// Must be called from `isProcessing` (reply start), NOT from `isReadingAloud`
-    /// — reading itself needs the capture flag released first, so waiting for it
-    /// would deadlock (no reply spoken → "pending" stays 0 → next round starts).
+    /// [CallMode] "AI speaking" vs "listening" inside the continuous call.
+    /// Playing a reply NEVER stops the engine (that would tear down the
+    /// Bluetooth route and flip ANC) — we tag input as ignored while the
+    /// in-app AutoPlayback plays, then un-ignore to resume recognition.
     func setCallReplyPlaying(_ playing: Bool) {
         guard callModeActive else { return }
-        vad.setIgnoreInput(playing)                         // engine stays alive
-        VoiceModePreference.shared.isCapturing = !playing   // gate for canSpeakNow
+        vad.setIgnoreInput(playing)
         if playing {
-            VoiceLog.log("[CallMode] reply phase — mic ignored, TTS allowed")
+            VoiceLog.log("[CallMode] reply playing — mic ignored (engine alive)")
         } else {
             resumeListening()
         }
@@ -1230,11 +1214,10 @@ final class VoiceInputViewModel: ObservableObject {
         cancelPendingForceFlush()
         pendingSegments.removeAll(keepingCapacity: true)
         // Stop the mic on send (and cancel idle/background timers via stopListening).
-        // [CallMode] The boss's rule: once a message is SENT, pause recording
-        // immediately — listening resumes only after the whole reply (incl.
-        // read-aloud) has completed. Stopping the VAD also releases the capture
-        // flag so reply TTS is allowed to speak.
-        if vad.isRunning { stopListening() }
+        // [CallMode] "一直通话": in call mode the engine KEEPS running — reply
+        // playback is handled by setCallReplyPlaying (mic ignored, engine alive)
+        // so Bluetooth stays on ONE continuous call route (stable ANC).
+        if vad.isRunning, !callModeActive { stopListening() }
         state = .waiting
         // Signal the inline view to collapse to compact mode after a send.
         collapseAfterSendToken &+= 1

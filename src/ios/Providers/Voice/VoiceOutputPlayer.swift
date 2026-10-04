@@ -1,7 +1,6 @@
 import Foundation
 import AVFoundation
-
-// MARK: - Voice-output preference (persisted)
+import UserNotifications
 
 enum VoiceOutputPreferences {
     private static let key = "voice.output.readRepliesAloud"
@@ -699,6 +698,8 @@ final class AutoPlaybackController: NSObject, ObservableObject, AVAudioPlayerDel
         stop()
         onFinished = completion
         lastError = nil
+        // [老板流程] 先发 APP 本地通知(提示"回复来了")，再调 TTS API 直接播报。
+        Self.postPlaybackNotice()
         let apiKey = AutoPlaybackSettings.apiKey
         guard !apiKey.isEmpty else { fail("自动播放：尚未填写小米 API Key"); return }
         guard let url = URL(string: Self.composeURL()) else { fail("自动播放：Base URL 无效"); return }
@@ -746,6 +747,16 @@ final class AutoPlaybackController: NSObject, ObservableObject, AVAudioPlayerDel
         lastError = msg
         VoiceLog.log("[AutoPlayback] \(msg)")
         onFinished?(); onFinished = nil
+    }
+
+    /// 前台本地通知提示 "AI 回复来了"（老板流程第一步）。
+    private static func postPlaybackNotice() {
+        let center = UNUserNotificationCenter.current()
+        let content = UNMutableNotificationContent()
+        content.title = "AI 回复"
+        content.body = "回复来了，正在播报…"
+        content.sound = nil
+        center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     private func play(_ data: Data) throws {
