@@ -5095,6 +5095,8 @@ struct AIChatView: View {
         // → "send() GUARD FAILED" and nothing was sent. send() consumes and clears
         // inputText itself; we re-arm voice listening only AFTER it has run.
         vm.send()
+        // [老板] 发送提示音
+        PlaybackTones.send()
         // [inline-voice] Stay in voice mode after sending — clear the recognized
         // text and re-arm listening for the next utterance (close with ✕).
         if voiceInputActive {

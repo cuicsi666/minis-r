@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import UserNotifications
+import AudioToolbox
 
 enum VoiceOutputPreferences {
     private static let key = "voice.output.readRepliesAloud"
@@ -639,6 +640,16 @@ extension VoiceOutputPlayer: AVAudioPlayerDelegate {
     }
 }
 
+// MARK: - PlaybackTones (老板需求: 发送/回复开始/回复完成的提示音)
+enum PlaybackTones {
+    /// 发送消息时
+    static func send() { AudioServicesPlaySystemSound(1104) }
+    /// 回复播报开始时
+    static func replyStart() { AudioServicesPlaySystemSound(1113) }
+    /// 回复播报完成时
+    static func replyDone() { AudioServicesPlaySystemSound(1054) }
+}
+
 // MARK: - AutoPlayback (老板定制: 独立播报系统「自动播放」)
 //
 // A self-contained reply-voicing system: when enabled, the completed reply text
@@ -741,6 +752,7 @@ final class AutoPlaybackController: NSObject, ObservableObject, AVAudioPlayerDel
                     self.fail("自动播放：TTS 响应解析失败"); return
                 }
                 self.isSynthesizing = false
+                PlaybackTones.replyStart()   // 回复播报开始提示音
                 try self.play(audioData)
             } catch {
                 self.fail("自动播放：请求失败 \(error.localizedDescription)")
@@ -778,6 +790,7 @@ final class AutoPlaybackController: NSObject, ObservableObject, AVAudioPlayerDel
         Task { @MainActor in
             self.isPlaying = false
             AudioSessionCoordinator.shared.end(.replyTTS)
+            PlaybackTones.replyDone()   // 回复播报完成提示音
             self.onFinished?(); self.onFinished = nil
         }
     }

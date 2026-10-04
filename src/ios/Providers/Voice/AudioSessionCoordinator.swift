@@ -235,10 +235,10 @@ final class AudioSessionCoordinator {
         // changes between listening and speaking → no Bluetooth A2DP↔HFP toggle.
         case .capture, .replyTTS:
             if callModeProfileForced {
-                // [T-call-consistent-link] BOSS: 全程同一条通话链路.
-                // HFP 全双工：蓝牙耳机麦收音 + 播报也走这条 HFP 输出(通话播报).
-                // 整通电话 category/mode/options 一次设定后不再变 — 耳机只建一次
-                // 电话会话, ANC 只开关一次, 与媒体模式混用导致的切换冲突消除.
+                // [T-call-consistent-link] BOSS: 播报走通话线路(HFP), 与麦克风同一条线.
+                // HFP 全双工单链路: 蓝牙麦收音 + 播报也从这条 HFP 通话线路输出.
+                // session category/mode/options 全程只配一次, 耳朵只建一次电话会话
+                // → ANC 只开关一次, 播报与聆听同线无冲突.
                 return (.playAndRecord, .default, [.allowBluetooth])
             }
             if intent == .capture {
@@ -253,8 +253,8 @@ final class AudioSessionCoordinator {
         case .backgroundKeepAlive:
             return (.playback, .default, [.mixWithOthers])
         case .callHold:
-            // [T-call-consistent-link] HFP duel-mode hold for the WHOLE call:
-            // Bluetooth headset mic + headset output on one phone-call link that
+            // [T-call-consistent-link] HFP 单链路 hold for the WHOLE call:
+            // Bluetooth headset mic + 播报(通话线路) on one phone-call link that
             // is configured once and never changed — ANC engages once, stays.
             return (.playAndRecord, .default, [.allowBluetooth])
         }
