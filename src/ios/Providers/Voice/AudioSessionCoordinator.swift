@@ -235,12 +235,11 @@ final class AudioSessionCoordinator {
         // changes between listening and speaking → no Bluetooth A2DP↔HFP toggle.
         case .capture, .replyTTS:
             if callModeProfileForced {
-                // [T-call-media-mode] BOSS: 用媒体模式不要通话模式. The headset
-                // stays in A2DP (media audio) ONLY — output goes to the headset,
-                // mic uses the phone's built-in mic. No HFP phone-call link is
-                // ever established, so the headset's phone-call ANC never
-                // engages/toggles. Session stays put on one stable media route.
-                return (.playAndRecord, .default, [.allowBluetoothA2DP])
+                // [T-call-consistent-link] BOSS: 全程同一条通话链路.
+                // HFP 全双工：蓝牙耳机麦收音 + 播报也走这条 HFP 输出(通话播报).
+                // 整通电话 category/mode/options 一次设定后不再变 — 耳机只建一次
+                // 电话会话, ANC 只开关一次, 与媒体模式混用导致的切换冲突消除.
+                return (.playAndRecord, .default, [.allowBluetooth])
             }
             if intent == .capture {
                 // [T-bluetooth-mic] `.allowBluetooth` lets the headset's HFP mic
@@ -254,10 +253,10 @@ final class AudioSessionCoordinator {
         case .backgroundKeepAlive:
             return (.playback, .default, [.mixWithOthers])
         case .callHold:
-            // [T-call-media-mode] Media-mode hold for the whole call: Bluetooth
-            // stays A2DP (output to headset), mic = phone built-in. No HFP link
-            // → the headset never enters phone-call ANC mode → no ANC toggling.
-            return (.playAndRecord, .default, [.allowBluetoothA2DP])
+            // [T-call-consistent-link] HFP duel-mode hold for the WHOLE call:
+            // Bluetooth headset mic + headset output on one phone-call link that
+            // is configured once and never changed — ANC engages once, stays.
+            return (.playAndRecord, .default, [.allowBluetooth])
         }
     }
 
@@ -315,8 +314,6 @@ final class AudioSessionCoordinator {
         if needsActivate { sessionActive = true }
 
         let log = logger
-        // [T-media-mode] Read the actor-isolated flag BEFORE the escaping closure.
-        let mediaMode = callModeProfileForced
         // Tracks queued-but-unapplied profile switches so `beginAndWait` knows
         // whether there is anything to wait for. Incremented here on the main
         // actor and decremented ON THE SESSION QUEUE (not via a hop back to the
@@ -343,10 +340,7 @@ final class AudioSessionCoordinator {
                 // on THIS queue, so by the time it returns and `setupEngineAndVAD`
                 // reads `inputNode.inputFormat`, the Bluetooth mic (16 kHz mono)
                 // is already the selected input — the tap sees the right format.
-                // [T-media-mode] Bluetooth-mic selection stays for NON-call capture (HFP).
-                // In call media-mode the mic is the phone built-in by design
-                // (headset is A2DP output-only) — no HFP input to prefer.
-                if (top == .capture || top == .callHold), !mediaMode {
+                if top == .capture || top == .callHold {
                     BluetoothMicRouter.preferBluetoothMic()
                 }
                 let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
