@@ -315,6 +315,8 @@ final class AudioSessionCoordinator {
         if needsActivate { sessionActive = true }
 
         let log = logger
+        // [T-media-mode] Read the actor-isolated flag BEFORE the escaping closure.
+        let mediaMode = callModeProfileForced
         // Tracks queued-but-unapplied profile switches so `beginAndWait` knows
         // whether there is anything to wait for. Incremented here on the main
         // actor and decremented ON THE SESSION QUEUE (not via a hop back to the
@@ -344,7 +346,7 @@ final class AudioSessionCoordinator {
                 // [T-media-mode] Bluetooth-mic selection stays for NON-call capture (HFP).
                 // In call media-mode the mic is the phone built-in by design
                 // (headset is A2DP output-only) — no HFP input to prefer.
-                if (top == .capture || top == .callHold), !callModeProfileForced {
+                if (top == .capture || top == .callHold), !mediaMode {
                     BluetoothMicRouter.preferBluetoothMic()
                 }
                 let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
