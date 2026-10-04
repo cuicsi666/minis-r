@@ -7204,10 +7204,12 @@ private struct AutoPlaybackSettingsView: View {
                 } footer: {
                     Text("开启后，每次 AI 回复内容都会自动用小米 TTS 播报（默认声色：茉莉）。开启后通话会等整段播报完成后才继续监听。")
                 }
-                Section("小米播报 API") {
+                Section {
                     TextField("Base URL", text: $baseURL)
                     SecureField("API Key", text: $apiKey)
                     TextField("声色 (Voice)", text: $voice)
+                } header: {
+                    Text("小米播报 API")
                 } footer: {
                     Text("默认 https://api.xiaomimimo.com/v1 · 茉莉")
                 }
