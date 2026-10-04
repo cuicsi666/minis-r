@@ -673,6 +673,12 @@ enum AutoPlaybackSettings {
         get { UserDefaults.standard.string(forKey: vKey) ?? "茉莉" }
         set { UserDefaults.standard.set(newValue, forKey: vKey) }
     }
+    /// 嘈杂环境识别增强: 语音输入切到小米MiMo ASR (default ON for noisy env).
+    private static let asrKey = "AutoPlayback.useMimoASR"
+    static var useMimoASR: Bool {
+        get { UserDefaults.standard.object(forKey: asrKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: asrKey) }
+    }
 }
 
 @MainActor

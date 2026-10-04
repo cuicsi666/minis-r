@@ -920,13 +920,24 @@ final class ProviderConfigStore: ObservableObject {
         config.modelEntries.append(contentsOf: mimoEntries)
         let voiceGroup = ModelGroup(name: "小米语音(茉莉)", memberEntryIds: mimoEntries.map(\.id))
         config.modelGroups.append(voiceGroup)
-        // [MinisR] Do NOT force MiMo as the default ASR/TTS — the boss wants the
-        // app to start on the system default and let them pick MiMo (ASR / 茉莉)
-        // in Settings. The instance + voice group stay so the option exists.
-        logger.info("[MinisR] seed: MiMo voice embedded (user-selectable; default left to system)")
+        // [T-noisy-env] 环境嘈杂: 默认把语音识别指到小米MiMo ASR
+        // (mimo-v2.5-asr 官方为强噪/远场/多人对话设计, 比 iOS 离线识别更扛杂音)。
+        // 用户可在「自动播放」设置的开关切回 System。
+        config.voiceInputGroupId = voiceGroup.id
+        // 播报不走这里(自动播放自研系统调 TTS API), 因此不设 voiceOutputGroupId
+        logger.info("[MinisR] seed: MiMo voice embedded — input/ASR default=MiMo (noisy-env), output=AutoPlayback")
         UserDefaults.standard.set(true, forKey: stampKey)
         save()
         logger.info("[MinisR] seed complete: instance=\(instance.label) entries=\(entries.count) group=\(group.name) defaultGroup=\(group.id)")
+    }
+
+    /// 语音识别引擎切换: 传 groupId(=小米MiMo语音组)启用"嘈杂环境识别增强",
+    /// 传 nil 回到 System(离线)。由「自动播放」设置页调用。
+    func setVoiceInputGroup(_ groupId: String?) {
+        guard config.voiceInputGroupId != groupId else { return }
+        config.voiceInputGroupId = groupId
+        save()
+        logger.info("[MinisR] setVoiceInputGroup -> \(groupId ?? "system")")
     }
 
     func addInstance(_ instance: ProviderInstance) {

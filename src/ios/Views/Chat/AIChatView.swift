@@ -7195,6 +7195,7 @@ private struct AutoPlaybackSettingsView: View {
     @State private var baseURL = AutoPlaybackSettings.baseURL
     @State private var apiKey = AutoPlaybackSettings.apiKey
     @State private var voice = AutoPlaybackSettings.voice
+    @State private var asrBoost = AutoPlaybackSettings.useMimoASR
 
     var body: some View {
         NavigationStack {
@@ -7212,6 +7213,11 @@ private struct AutoPlaybackSettingsView: View {
                     Text("小米播报 API")
                 } footer: {
                     Text("默认 https://api.xiaomimimo.com/v1 · 茉莉")
+                }
+                Section {
+                    Toggle("嘈杂环境识别增强（小米ASR）", isOn: $asrBoost)
+                } footer: {
+                    Text("环境嘈杂时建议开启：语音识别改用小米 MiMo ASR（专为强噪/远场设计），识别更准。关闭则用系统内置识别。")
                 }
                 if let err = AutoPlaybackController.shared.lastError {
                     Section {
@@ -7235,5 +7241,15 @@ private struct AutoPlaybackSettingsView: View {
         AutoPlaybackSettings.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         AutoPlaybackSettings.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         AutoPlaybackSettings.voice = voice.trimmingCharacters(in: .whitespacesAndNewlines)
+        AutoPlaybackSettings.useMimoASR = asrBoost
+        // 识别引擎切换: 开=小米MiMo ASR(嘈杂增强) / 关=System
+        if asrBoost {
+            let store = ProviderConfigStore.shared
+            if let g = store.config.modelGroups.first(where: { $0.name == "小米语音(茉莉)" }) {
+                store.setVoiceInputGroup(g.id)
+            }
+        } else {
+            ProviderConfigStore.shared.setVoiceInputGroup(nil)
+        }
     }
 }
