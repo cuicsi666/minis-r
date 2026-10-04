@@ -7206,8 +7206,6 @@ private struct AutoPlaybackSettingsView: View {
                 }
                 Section("小米播报 API") {
                     TextField("Base URL", text: $baseURL)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
                     SecureField("API Key", text: $apiKey)
                     TextField("声色 (Voice)", text: $voice)
                 } footer: {
